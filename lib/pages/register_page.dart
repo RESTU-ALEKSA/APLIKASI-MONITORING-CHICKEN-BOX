@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import '../routes/app_routes.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -12,11 +17,14 @@ class _RegisterPageState extends State<RegisterPage> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  final TextEditingController _confirmPasswordController =
-      TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
 
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  bool _isLoading = false;
+
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
 
   @override
   void dispose() {
@@ -25,6 +33,165 @@ class _RegisterPageState extends State<RegisterPage> {
     _passwordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  // ── FUNGSI REGISTRASI FIREBASE + VERIFIKASI EMAIL ──
+  Future<void> _handleRegister() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
+
+    if (name.isEmpty || email.isEmpty || password.isEmpty || confirmPassword.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: const Text('Semua kolom wajib diisi!'), backgroundColor: Colors.red.shade800),
+      );
+      return;
+    }
+
+    if (password != confirmPassword) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: const Text('Password tidak cocok!'), backgroundColor: Colors.red.shade800),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      // 1. Buat user baru di Firebase
+      final UserCredential userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(email: email, password: password);
+
+      final User? user = userCredential.user;
+
+      if (user != null) {
+        // 2. Update nama (display name) di profil Firebase
+        await user.updateDisplayName(name);
+
+        // 3. Kirim Email Verifikasi! ✉️
+        if (!user.emailVerified) {
+          await user.sendEmailVerification();
+
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Registrasi sukses! Silakan cek inbox/spam email kamu untuk verifikasi.'),
+                backgroundColor: Colors.green,
+                duration: Duration(seconds: 5),
+              ),
+            );
+          }
+        }
+
+        // 4. Ambil token Firebase dan kirim ke FastAPI kita
+        final String? firebaseToken = await user.getIdToken();
+        if (firebaseToken != null) {
+          await _exchangeTokenWithBackend(firebaseToken);
+        }
+      }
+    } on FirebaseAuthException catch (e) {
+      String pesanError = 'Terjadi kesalahan Firebase.';
+      if (e.code == 'weak-password') {
+        pesanError = 'Password terlalu lemah (minimal 6 karakter).';
+      } else if (e.code == 'email-already-in-use') {
+        pesanError = 'Email ini sudah terdaftar.';
+      } else if (e.code == 'invalid-email') {
+        pesanError = 'Format email tidak valid.';
+      }
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(pesanError), backgroundColor: Colors.red.shade800),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Terjadi kesalahan: $error'), backgroundColor: Colors.red.shade800),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // ── FUNGSI DAFTAR/LOGIN DENGAN GOOGLE ──
+  Future<void> _handleGoogleRegister() async {
+    setState(() => _isLoading = true);
+
+    try {
+      await _googleSignIn.signOut();
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+
+      if (googleUser == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      final User? user = userCredential.user;
+
+      if (user != null) {
+        final String? firebaseToken = await user.getIdToken();
+        if (firebaseToken != null) {
+          await _exchangeTokenWithBackend(firebaseToken);
+        }
+      } else {
+        throw Exception('Gagal mendapatkan user dari Firebase.');
+      }
+    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Firebase Error: ${e.message}'),
+            backgroundColor: Colors.red.shade800,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Terjadi kesalahan: $error'),
+            backgroundColor: Colors.red.shade800,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  // Tembak token Firebase ke backend kita (sama seperti di LoginPage)
+  Future<void> _exchangeTokenWithBackend(String firebaseToken) async {
+    final response = await http.post(
+      Uri.parse('https://api.pcb.my.id/auth/firebase/login'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({'id_token': firebaseToken}),
+    );
+
+    if (response.statusCode == 200) {
+      final responseData = jsonDecode(response.body);
+      final String backendToken = responseData['access_token'];
+      await _secureStorage.write(key: 'jwt_token', value: backendToken);
+
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+      }
+    } else {
+      throw Exception('Backend menolak login: ${response.statusCode} - ${response.body}');
+    }
   }
 
   @override
@@ -44,8 +211,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.055),
+                      SizedBox(height: MediaQuery.of(context).size.height * 0.055),
 
                       // Back Button
                       Align(
@@ -155,8 +321,7 @@ class _RegisterPageState extends State<RegisterPage> {
                           fontWeight: FontWeight.w400,
                         ),
                       ),
-                      SizedBox(
-                          height: MediaQuery.of(context).size.height * 0.055),
+                      SizedBox(height: MediaQuery.of(context).size.height * 0.055),
                     ],
                   ),
                 ),
@@ -172,8 +337,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 Container(
                   color: const Color(0xFFEBEBEB),
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 8),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -222,14 +386,11 @@ class _RegisterPageState extends State<RegisterPage> {
                         obscure: _obscurePassword,
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
+                            _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                             color: const Color(0xFFAAAAAA),
                             size: 20,
                           ),
-                          onPressed: () =>
-                              setState(() => _obscurePassword = !_obscurePassword),
+                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                         ),
                       ),
                       const SizedBox(height: 12),
@@ -241,14 +402,11 @@ class _RegisterPageState extends State<RegisterPage> {
                         obscure: _obscureConfirm,
                         suffixIcon: IconButton(
                           icon: Icon(
-                            _obscureConfirm
-                                ? Icons.visibility_off_outlined
-                                : Icons.visibility_outlined,
+                            _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
                             color: const Color(0xFFAAAAAA),
                             size: 20,
                           ),
-                          onPressed: () =>
-                              setState(() => _obscureConfirm = !_obscureConfirm),
+                          onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
                         ),
                       ),
                       const SizedBox(height: 22),
@@ -258,11 +416,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         width: double.infinity,
                         height: 54,
                         child: ElevatedButton(
-                          onPressed: () {
-                            // TODO: validasi & simpan akun
-                            Navigator.of(context)
-                                .pushReplacementNamed(AppRoutes.home);
-                          },
+                          onPressed: _isLoading ? null : _handleRegister,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF5C4033),
                             elevation: 0,
@@ -270,7 +424,16 @@ class _RegisterPageState extends State<RegisterPage> {
                               borderRadius: BorderRadius.circular(30),
                             ),
                           ),
-                          child: const Text(
+                          child: _isLoading
+                              ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                              : const Text(
                             'Daftar',
                             style: TextStyle(
                               fontSize: 16,
@@ -287,8 +450,7 @@ class _RegisterPageState extends State<RegisterPage> {
                       // OR Divider
                       Row(
                         children: [
-                          Expanded(
-                              child: Container(height: 1, color: const Color(0xFFCCCCCC))),
+                          Expanded(child: Container(height: 1, color: const Color(0xFFCCCCCC))),
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 12),
                             child: Text(
@@ -301,8 +463,7 @@ class _RegisterPageState extends State<RegisterPage> {
                               ),
                             ),
                           ),
-                          Expanded(
-                              child: Container(height: 1, color: const Color(0xFFCCCCCC))),
+                          Expanded(child: Container(height: 1, color: const Color(0xFFCCCCCC))),
                         ],
                       ),
 
@@ -313,10 +474,7 @@ class _RegisterPageState extends State<RegisterPage> {
                         width: double.infinity,
                         height: 54,
                         child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.of(context)
-                                .pushReplacementNamed(AppRoutes.home);
-                          },
+                          onPressed: _isLoading ? null : _handleGoogleRegister,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             elevation: 3,
@@ -325,7 +483,16 @@ class _RegisterPageState extends State<RegisterPage> {
                               borderRadius: BorderRadius.circular(30),
                             ),
                           ),
-                          child: Row(
+                          child: _isLoading
+                              ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5C4033)),
+                            ),
+                          )
+                              : Row(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Image.asset(
@@ -400,8 +567,7 @@ class _RegisterPageState extends State<RegisterPage> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                            TextSpan(
-                                text: ' serta Kebijakan Privasi Smart Kandang.'),
+                            TextSpan(text: ' serta Kebijakan Privasi Smart Kandang.'),
                           ],
                         ),
                       ),
@@ -454,8 +620,7 @@ class _RegisterPageState extends State<RegisterPage> {
         hintStyle: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 14),
         filled: true,
         fillColor: Colors.white,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(30),
           borderSide: BorderSide.none,
@@ -466,8 +631,7 @@ class _RegisterPageState extends State<RegisterPage> {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(30),
-          borderSide:
-              const BorderSide(color: Color(0xFF5C4033), width: 1.5),
+          borderSide: const BorderSide(color: Color(0xFF5C4033), width: 1.5),
         ),
         suffixIcon: suffixIcon,
       ),
