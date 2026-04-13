@@ -36,7 +36,7 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
-  image_path: "assets/images/logo.png"
+  image_path: "assets/images/logo_2.jpg"
   min_sdk_size: 21
 
 # RATA KIRI MENTOK
