@@ -1,7 +1,7 @@
 # API Contract — Smart Chicken Box (PCB) Backend
 
 > **Version:** 1.0.0
-> **Last Updated:** 2026-04-26
+> **Last Updated:** 2026-05-31
 > **Audience:** Flutter frontend agent / mobile developer
 > **Backend:** FastAPI 0.115 + PostgreSQL 15 + MQTT (Mosquitto 2)
 
@@ -1373,3 +1373,80 @@ The server does **not** send ping/pong frames. If the connection drops:
 5. If the server returns close code **4001**, **4003**, or **4004**, do **not** reconnect.
 
 ---
+
+## 5. Role-Based Access Control (RBAC)
+
+The backend uses hierarchical roles. The Flutter app should use these roles only for UI visibility and user guidance; the backend remains the source of truth for authorization.
+
+| Role | Scope | Typical app behavior |
+| --- | --- | --- |
+| `super_admin` | Full system access | Can register/delete devices, see all devices, manage users, and access admin endpoints |
+| `admin` | Device owner / farm manager | Can claim devices, manage owned devices, assign operators/viewers, and control owned devices |
+| `operator` | Assigned device operator | Can view assigned devices and send control commands |
+| `viewer` | Assigned read-only user | Can view assigned devices and logs but cannot control devices |
+| `user` | Authenticated account without device access | Sees an empty device list until promoted or assigned |
+
+### Device Access Rules
+
+| Action | Allowed roles |
+| --- | --- |
+| Register device MAC | `super_admin` |
+| Claim unclaimed device | `admin`, `super_admin` |
+| List accessible devices | Any authenticated user; response is filtered by role |
+| Rename owned device | Device owner `admin`, `super_admin` |
+| Delete device | `super_admin` |
+| Control device | Assigned `operator`, owner `admin`, `super_admin` |
+| View logs/status/alerts | Any role with access to that device |
+| Assign/unassign users | Device owner `admin`, `super_admin` |
+
+Device endpoints may return `404` instead of `403` when the resource exists but the caller has no access. This prevents device enumeration.
+
+## 6. Pagination Format
+
+Paginated endpoints return the same wrapper:
+
+```json
+{
+  "data": [],
+  "total": 0,
+  "page": 1,
+  "limit": 20,
+  "total_pages": 0
+}
+```
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `data` | array | Current page records |
+| `total` | integer | Total matching records |
+| `page` | integer | Current page number, starting at 1 |
+| `limit` | integer | Page size |
+| `total_pages` | integer | Total available pages |
+
+Common query parameters:
+
+| Parameter | Default | Constraint |
+| --- | --- | --- |
+| `page` | `1` | `>= 1` |
+| `limit` | `20` | `1-100` |
+
+`GET /api/devices/{device_id}/assignments` is intentionally not paginated and returns a plain JSON array.
+
+## 7. Validation Constraints Reference
+
+| Field | Constraint |
+| --- | --- |
+| `id_token` | Required string, max 4096 chars |
+| `full_name` | Required string, 1-100 chars after trimming |
+| `mac_address` | Required, either `XX:XX:XX:XX:XX:XX` or `XXXXXXXXXXXX`; normalized to uppercase colon format |
+| `name` | Required string, 1-100 chars after trimming |
+| `component` | One of `kipas`, `lampu`, `pompa`, `pakan_otomatis`, `exhaust_fan` |
+| `state` | Required boolean |
+| `role` for user role update | One of `super_admin`, `admin`, `operator`, `viewer`, `user` |
+| `role` for device assignment | One of `operator`, `viewer` |
+| `token` for FCM | Required string, 10-500 chars |
+| `device_info` | Optional string, max 200 chars |
+| `days` for stats | Integer `1-90` |
+| `days` for cleanup | Integer `>= 1` |
+
+Clients should parse `422` validation arrays and show field-level feedback where possible.
