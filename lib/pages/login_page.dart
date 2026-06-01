@@ -28,7 +28,11 @@ class _LoginPageState extends State<LoginPage> {
     super.dispose();
   }
 
+<<<<<<< HEAD
   // ── FUNGSI LOGIN EMAIL ──
+=======
+  // ── FUNGSI LOGIN EMAIL & PASSWORD ──
+>>>>>>> upstream/main
   Future<void> _handleEmailLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -41,20 +45,52 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
+<<<<<<< HEAD
       final UserCredential userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
+=======
+      // 1. Login pakai Firebase
+      final UserCredential userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+>>>>>>> upstream/main
 
       final User? user = userCredential.user;
       if (user != null) {
+        // Cek apakah email sudah diverifikasi? (Opsional)
+        // if (!user.emailVerified) {
+        //    await FirebaseAuth.instance.signOut();
+        //    throw Exception("Email belum diverifikasi. Cek inbox/spam kamu!");
+        // }
+
+        // 2. Kalau aman, minta token dan lempar ke backend
         final String? firebaseToken = await user.getIdToken();
         if (firebaseToken != null) {
           await _exchangeTokenWithBackend(firebaseToken);
         }
       }
     } on FirebaseAuthException catch (e) {
+<<<<<<< HEAD
       _showError('Login gagal: ${e.message}');
+=======
+      String pesanError = 'Login gagal.';
+      if (e.code == 'user-not-found' || e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        pesanError = 'Email atau password salah.';
+      } else if (e.code == 'invalid-email') {
+        pesanError = 'Format email tidak valid.';
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(pesanError),
+            backgroundColor: Colors.red.shade800,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+>>>>>>> upstream/main
     } catch (error) {
       _showError('Terjadi kesalahan sistem: $error');
     } finally {
@@ -62,6 +98,7 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+<<<<<<< HEAD
   // ── FUNGSI LUPA PASSWORD (FIREBASE) DENGAN POP-UP ──
   void _handleForgotPassword() {
     // Siapkan controller untuk pop-up, otomatis terisi kalau user sudah mengetik email di form login
@@ -80,11 +117,35 @@ class _LoginPageState extends State<LoginPage> {
               const Text(
                 'Masukkan email Anda yang terdaftar. Kami akan mengirimkan link untuk membuat password baru.',
                 style: TextStyle(fontSize: 13, color: Color(0xFF666666), height: 1.5),
+=======
+  // ── FUNGSI LUPA PASSWORD (POP-UP) ──
+  Future<void> _showForgotPasswordDialog() async {
+    final TextEditingController resetEmailController =
+    TextEditingController(text: _emailController.text);
+
+    showDialog(
+      context: context, // Ini Context milik LoginPage
+      builder: (dialogContext) { // UBAH NAMA INI JADI dialogContext
+        return AlertDialog(
+          backgroundColor: const Color(0xFFEBEBEB),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text(
+            'Reset Password',
+            style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1A1A1A)),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Masukkan email yang terdaftar. Kami akan mengirimkan link untuk membuat password baru.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF666666)),
+>>>>>>> upstream/main
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: resetEmailController,
                 keyboardType: TextInputType.emailAddress,
+<<<<<<< HEAD
                 decoration: InputDecoration(
                   hintText: 'Email Anda',
                   prefixIcon: const Icon(Icons.email_outlined, color: Color(0xFF5C4033)),
@@ -92,25 +153,50 @@ class _LoginPageState extends State<LoginPage> {
                   fillColor: const Color(0xFFF5F5F5),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+=======
+                style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
+                decoration: InputDecoration(
+                  hintText: 'Email kamu',
+                  hintStyle: const TextStyle(color: Color(0xFFAAAAAA), fontSize: 14),
+                  filled: true,
+                  fillColor: Colors.white,
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: BorderSide.none,
+                  ),
+>>>>>>> upstream/main
                 ),
               ),
             ],
           ),
+<<<<<<< HEAD
           actionsPadding: const EdgeInsets.only(right: 16, bottom: 16),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Batal', style: TextStyle(color: Color(0xFF999999), fontWeight: FontWeight.w600)),
+=======
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(), // Tutup pakai dialogContext
+              child: const Text('Batal', style: TextStyle(color: Color(0xFF888888))),
+>>>>>>> upstream/main
             ),
             ElevatedButton(
               style: ElevatedButton.styleFrom(
                 backgroundColor: const Color(0xFF5C4033),
+<<<<<<< HEAD
                 elevation: 0,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+=======
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+>>>>>>> upstream/main
               ),
               onPressed: () async {
                 final email = resetEmailController.text.trim();
                 if (email.isEmpty) {
+<<<<<<< HEAD
                   _showError('Email tidak boleh kosong.');
                   return;
                 }
@@ -125,17 +211,71 @@ class _LoginPageState extends State<LoginPage> {
                       const SnackBar(
                         content: Text('Link reset password telah dikirim ke email Anda.'),
                         backgroundColor: Color(0xFF2E7D32), // Hijau Sukses
+=======
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    SnackBar(
+                      content: const Text('Email harus diisi!'),
+                      backgroundColor: Colors.red.shade800,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
+
+                // 1. TANGKAP MESSENGER DARI HALAMAN UTAMA (context)
+                // Lakukan ini sebelum menutup dialog agar aman
+                final messenger = ScaffoldMessenger.of(context);
+
+                // 2. Tutup dialognya
+                Navigator.of(dialogContext).pop();
+
+                setState(() => _isLoading = true);
+
+                try {
+                  await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+
+                  if (mounted) {
+                    // 3. GUNAKAN MESSENGER YANG SUDAH DITANGKAP
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('Email sudah dikirim, silakan cek di kotak utama atau folder spam.'),
+                        backgroundColor: Colors.green,
+                        duration: Duration(seconds: 5),
+>>>>>>> upstream/main
                         behavior: SnackBarBehavior.floating,
                       ),
                     );
                   }
                 } on FirebaseAuthException catch (e) {
+<<<<<<< HEAD
                   _showError('Gagal mengirim link: ${e.message}');
                 } catch (error) {
                   _showError('Terjadi kesalahan sistem: $error');
                 }
               },
               child: const Text('Kirim Link', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+=======
+                  String pesan = 'Terjadi kesalahan.';
+                  if (e.code == 'user-not-found') {
+                    pesan = 'Email tidak terdaftar di sistem kami.';
+                  } else if (e.code == 'invalid-email') {
+                    pesan = 'Format email tidak valid.';
+                  }
+                  if (mounted) {
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(pesan),
+                        backgroundColor: Colors.red.shade800,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                } finally {
+                  if (mounted) setState(() => _isLoading = false);
+                }
+              },
+              child: const Text('Kirim Link', style: TextStyle(color: Colors.white)),
+>>>>>>> upstream/main
             ),
           ],
         );
@@ -156,13 +296,23 @@ class _LoginPageState extends State<LoginPage> {
         return;
       }
 
+<<<<<<< HEAD
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+=======
+      final GoogleSignInAuthentication googleAuth =
+      await googleUser.authentication;
+>>>>>>> upstream/main
       final credential = GoogleAuthProvider.credential(
         accessToken: googleAuth.accessToken,
         idToken: googleAuth.idToken,
       );
 
+<<<<<<< HEAD
       final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+=======
+      final UserCredential userCredential =
+      await FirebaseAuth.instance.signInWithCredential(credential);
+>>>>>>> upstream/main
       final User? user = userCredential.user;
 
       if (user != null) {
@@ -182,7 +332,11 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
+<<<<<<< HEAD
   // ── FUNGSI TUKAR TOKEN (via AuthService + TokenManager) ──
+=======
+  // ── FUNGSI TUKAR TOKEN KE BACKEND ──
+>>>>>>> upstream/main
   Future<void> _exchangeTokenWithBackend(String firebaseToken) async {
     try {
       // AuthService.login() handles:
@@ -279,8 +433,22 @@ class _LoginPageState extends State<LoginPage> {
                                     fit: BoxFit.cover,
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
+<<<<<<< HEAD
                                         decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
                                         child: const Center(child: Icon(Icons.home, size: 70, color: Color(0xFFFF8C00))),
+=======
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius: BorderRadius.circular(20),
+                                        ),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.home,
+                                            size: 70,
+                                            color: Color(0xFFFF8C00),
+                                          ),
+                                        ),
+>>>>>>> upstream/main
                                       );
                                     },
                                   ),
@@ -384,6 +552,7 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ),
                       ),
+<<<<<<< HEAD
                       const SizedBox(height: 12),
 
                       // ── TOMBOL LUPA PASSWORD ──
@@ -391,12 +560,26 @@ class _LoginPageState extends State<LoginPage> {
                         alignment: Alignment.centerRight,
                         child: GestureDetector(
                           onTap: _handleForgotPassword,
+=======
+
+                      // ── TOMBOL LUPA PASSWORD ──
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: GestureDetector(
+                          onTap: _showForgotPasswordDialog,
+>>>>>>> upstream/main
                           child: const Text(
                             'Lupa Password?',
                             style: TextStyle(
                               fontSize: 13,
+<<<<<<< HEAD
                               fontWeight: FontWeight.w700,
                               color: Color(0xFF5C4033),
+=======
+                              color: Color(0xFF5C4033),
+                              fontWeight: FontWeight.w700,
+>>>>>>> upstream/main
                             ),
                           ),
                         ),
@@ -415,8 +598,28 @@ class _LoginPageState extends State<LoginPage> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                           ),
                           child: _isLoading
+<<<<<<< HEAD
                               ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(strokeWidth: 2.5, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
                               : const Text('Masuk', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.5)),
+=======
+                              ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          )
+                              : const Text(
+                            'Masuk',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+>>>>>>> upstream/main
                         ),
                       ),
                       const SizedBox(height: 14),
@@ -439,12 +642,22 @@ class _LoginPageState extends State<LoginPage> {
                       // ── DIVIDER OR ──
                       Row(
                         children: [
+<<<<<<< HEAD
                           Expanded(child: Container(height: 1, color: const Color(0xFFCCCCCC))),
+=======
+                          Expanded(
+                              child: Container(height: 1, color: const Color(0xFFCCCCCC))),
+>>>>>>> upstream/main
                           const Padding(
                             padding: EdgeInsets.symmetric(horizontal: 12),
                             child: Text('OR', style: TextStyle(fontSize: 12, color: Color(0xFF999999), fontWeight: FontWeight.w500, letterSpacing: 1.0)),
                           ),
+<<<<<<< HEAD
                           Expanded(child: Container(height: 1, color: const Color(0xFFCCCCCC))),
+=======
+                          Expanded(
+                              child: Container(height: 1, color: const Color(0xFFCCCCCC))),
+>>>>>>> upstream/main
                         ],
                       ),
                       const SizedBox(height: 20),
@@ -459,6 +672,7 @@ class _LoginPageState extends State<LoginPage> {
                             backgroundColor: Colors.white,
                             elevation: 3,
                             shadowColor: Colors.black.withValues(alpha: 0.15),
+<<<<<<< HEAD
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
                           ),
                           child: _isLoading
@@ -477,7 +691,48 @@ class _LoginPageState extends State<LoginPage> {
                                     const SizedBox(width: 12),
                                     const Text('Masuk dengan Google', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: Color(0xFF1F2937), letterSpacing: 0.2)),
                                   ],
+=======
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(30),
+                            ),
+                          ),
+                          child: _isLoading
+                              ? const SizedBox(
+                            height: 24,
+                            width: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF5C4033)),
+                            ),
+                          )
+                              : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                'assets/images/google_logo.png',
+                                width: 24,
+                                height: 24,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(
+                                    Icons.account_circle,
+                                    size: 24,
+                                    color: Color(0xFF1F2937),
+                                  );
+                                },
+                              ),
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Masuk dengan Google',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: Color(0xFF1F2937),
+                                  letterSpacing: 0.2,
+>>>>>>> upstream/main
                                 ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       const SizedBox(height: 18),
@@ -488,7 +743,17 @@ class _LoginPageState extends State<LoginPage> {
                           style: TextStyle(fontSize: 11, color: Color(0xFF888888), letterSpacing: 0.1, height: 1.5),
                           children: [
                             TextSpan(text: 'Dengan masuk, kamu menyetujui '),
+<<<<<<< HEAD
                             TextSpan(text: 'Syarat & Ketentuan', style: TextStyle(color: Color(0xFFC62828), fontWeight: FontWeight.w600)),
+=======
+                            TextSpan(
+                              text: 'Syarat & Ketentuan',
+                              style: TextStyle(
+                                color: Color(0xFFC62828),
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+>>>>>>> upstream/main
                             TextSpan(text: ' serta Kebijakan Privasi Smart Kandang.'),
                           ],
                         ),

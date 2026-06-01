@@ -39,7 +39,11 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: true
+<<<<<<< HEAD
   image_path: "assets/images/logo_1.jpg"
+=======
+  image_path: "assets/images/logo_2.jpg"
+>>>>>>> upstream/main
   min_sdk_size: 21
 
 # RATA KIRI MENTOK
